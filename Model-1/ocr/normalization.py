@@ -152,7 +152,7 @@ def hystImageNorm(image):
 
 
 def imageNorm(image, height, border=True, tilt=True, borderSize=15, hystNorm=False):
-    """ 
+    """
     Preprocess image
     => resize, get edges, tilt world
     """
@@ -175,10 +175,10 @@ def imageNorm(image, height, border=True, tilt=True, borderSize=15, hystNorm=Fal
 def resizeLetter(img, size = 56):
     """ Resize bigger side of the image to given size """
     if (img.shape[0] > img.shape[1]):
-        rat = size / img.shape[0]
-        return cv2.resize(img, (int(rat * img.shape[1]), size))
+        rat = float(size) / img.shape[0]
+        return cv2.resize(img, (int(rat * img.shape[1]), size), interpolation = cv2.INTER_CUBIC)
     else:
-        rat = size / img.shape[1]
+        rat = float(size) / img.shape[1]
         return cv2.resize(img, (size, int(rat * img.shape[0])))
     return img
 
@@ -199,7 +199,7 @@ def letterNorm(image, is_thresh=True, dim=False):
         offset = [int((result.shape[1] - resized.shape[1])/2), 4]
     else:
         offset = [4, int((result.shape[0] - resized.shape[0])/2)]
-    # Replace zeros by image 
+    # Replace zeros by image
     result[offset[1]:offset[1] + resized.shape[0],
            offset[0]:offset[0] + resized.shape[1]] = resized
 

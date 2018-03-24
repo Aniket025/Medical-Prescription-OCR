@@ -41,39 +41,46 @@ def sobelDetect(channel):
 
 def textDetect(img, image):
     """ Text detection using contours """
+    small_2 = resize(image,2000)
     small = resize(img, 2000)
 
     # Finding contours
     mask = np.zeros(small.shape, np.uint8)
-    im2, cnt, hierarchy = cv2.findContours(np.copy(small),
-                                           cv2.RETR_CCOMP,
-                                           cv2.CHAIN_APPROX_SIMPLE)
+    im2, cnt, hierarchy = cv2.findContours(np.copy(small), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
     index = 0
     boundingBoxes = np.array([0,0,0,0])
 
     # image for drawing bounding boxes
     small = cv2.cvtColor(small, cv2.COLOR_GRAY2RGB)
-
+    small_copy = small.copy()
+    implt(small_copy , t='All contours')
+    cv2.drawContours(small_copy, cnt, -1, (0,255,0), 3)
+    implt(small_copy, t='check')
+    cv2.imwrite('check.jpg',small_copy)
     # Go through all contours in top level
-    while (index >= 0):
+    while (index >= 0 and index<40):
         x,y,w,h = cv2.boundingRect(cnt[index])
         cv2.drawContours(mask, cnt, index, (255, 255, 255), cv2.FILLED)
         maskROI = mask[y:y+h, x:x+w]
         # Ratio of white pixels to area of bounding rectangle
-        r = cv2.countNonZero(maskROI) / (w * h)
+        r = float(cv2.countNonZero(maskROI)) / (w * h)
 
         # Limits for text
-        if r > 0.1 and 1600 > w > 10 and 1600 > h > 10 and  (60 // h) * w < 1000:
+        #if r > 0.1 and 1600 > w > 10 and 1600 > h > 10 and  (60 // h) * w < 1000:
+        if r > 0.1 and 2000 > w > 15 and 1500 > h > 15:
             cv2.rectangle(small, (x, y),(x+w,y+h), (0, 255, 0), 2)
-            boundingBoxes = np.vstack((boundingBoxes,
-                                       np.array([x, y, x+w, y+h])))
+            crop_img = small_2[y:y+h,x:x+w]
+            implt(crop_img, t='contours %s' % (index))
+            cv2.imwrite('check%s.jpg' % (index),crop_img)
+            boundingBoxes = np.vstack((boundingBoxes,np.array([x, y, x+w, y+h])))
 
-        index = hierarchy[0][index][0]
+        index+=1
 
     implt(small, t='Bounding rectangles')
+    cv2.imwrite('check2.jpg',small)
 
     bBoxes = boundingBoxes.dot(ratio(image, 2000)).astype(np.int64)
-    return bBoxes[1:], small
+    return bBoxes[1:]
 
 
 def textDetectWatershed(thresh):
@@ -132,7 +139,7 @@ def textDetectWatershed(thresh):
         cv2.drawContours(mask, c, 0, (255, 255, 255), cv2.FILLED)
         maskROI = mask[y:y+h, x:x+w]
         # Ratio of white pixels to area of bounding rectangle
-        r = cv2.countNonZero(maskROI) / (w * h)
+        r = float(cv2.countNonZero(maskROI)) / (w * h)
 
         # Limits for text
         if r > 0.2 and 2000 > w > 15 and 1500 > h > 15:

@@ -10,34 +10,37 @@ def detection(image):
     """ Finding Page """
     # Edge detection
     imageEdges = edgesDet(image, 200, 250)
-
+    
     # Close gaps between edges (double page clouse => rectangle kernel)
-    closedEdges = cv2.morphologyEx(imageEdges,
-                                   cv2.MORPH_CLOSE,
-                                   np.ones((5, 11)))
+    closedEdges = cv2.morphologyEx(imageEdges, 
+                                   cv2.MORPH_CLOSE, 
+                                   np.ones((5, 11)))    
     # Countours
-    #pageContour = findPageContours(closedEdges, resize(image))
-    pageContour = findPageContours(closedEdges, image)
+    pageContour = findPageContours(closedEdges, resize(image))
     # Recalculate to original scale
-    pageContour = pageContour.dot(ratio(image))
+    pageContour = pageContour.dot(ratio(image))    
     # Transform prespective
     newImage = perspImageTransform(image, pageContour)
     return newImage
-
+   
 
 def edgesDet(img, minVal, maxVal):
     """ Preprocessing (gray, thresh, filter, border) + Canny edge detection """
-    #img = cv2.cvtColor(resize(img), cv2.COLOR_BGR2GRAY)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    img = cv2.cvtColor(resize(img), cv2.COLOR_BGR2GRAY)
+
     img = cv2.bilateralFilter(img, 9, 75, 75)
-    img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 115, 4)
+    img = cv2.adaptiveThreshold(img, 255,
+                                cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                cv2.THRESH_BINARY, 115, 4)
 
     # Median blur replace center pixel by median of pixels under kelner
     # => removes thin details
     img = cv2.medianBlur(img, 11)
 
     # Add black border - detection of border touching pages
-    img = cv2.copyMakeBorder(img, 5, 5, 5, 5, cv2.BORDER_CONSTANT, value=[0, 0, 0])
+    img = cv2.copyMakeBorder(img, 5, 5, 5, 5,
+                             cv2.BORDER_CONSTANT,
+                             value=[0, 0, 0])
     return cv2.Canny(img, minVal, maxVal)
 
 
@@ -60,11 +63,11 @@ def contourOffset(cnt, offset):
 
 def findPageContours(edges, img):
     """ Finding corner points of page contour """
-    # Getting contours
+    # Getting contours  
     im2, contours, hierarchy = cv2.findContours(edges,
                                                 cv2.RETR_TREE,
                                                 cv2.CHAIN_APPROX_SIMPLE)
-
+    
     # Finding biggest rectangle otherwise return original corners
     height = edges.shape[0]
     width = edges.shape[1]
@@ -85,7 +88,7 @@ def findPageContours(edges, img):
         if (len(approx) == 4 and
                 cv2.isContourConvex(approx) and
                 maxArea < cv2.contourArea(approx) < MAX_COUNTOUR_AREA):
-
+            
             maxArea = cv2.contourArea(approx)
             pageContour = approx
 
@@ -101,16 +104,16 @@ def perspImageTransform(img, sPoints):
                  np.linalg.norm(sPoints[2] - sPoints[3]))
     width = max(np.linalg.norm(sPoints[1] - sPoints[2]),
                  np.linalg.norm(sPoints[3] - sPoints[0]))
-
+    
     # Create target points
     tPoints = np.array([[0, 0],
                         [0, height],
                         [width, height],
                         [width, 0]], np.float32)
-
+    
     # getPerspectiveTransform() needs float32
     if sPoints.dtype != np.float32:
         sPoints = sPoints.astype(np.float32)
-
-    M = cv2.getPerspectiveTransform(sPoints, tPoints)
+    
+    M = cv2.getPerspectiveTransform(sPoints, tPoints) 
     return cv2.warpPerspective(img, M, (int(width), int(height)))

@@ -15,12 +15,11 @@ def implt(img, cmp=None, t=''):
     plt.show()
 
 
-def resize(img, height=SMALL_HEIGHT, always=False):
+def resize(img, height=SMALL_HEIGHT, allways=False):
     """ Resize image to given height """
-    if (img.shape[0] > height or always):
-        rat = height / img.shape[0]
-        return cv2.resize(img, (int(rat * img.shape[1]), height), interpolation = cv2.INTER_CUBIC)
-
+    if (img.shape[0] > height or allways):
+        rat = 1.0*height / img.shape[0]
+        return cv2.resize(img, (int(rat*img.shape[1]), height), interpolation = cv2.INTER_CUBIC)
     return img
 
 

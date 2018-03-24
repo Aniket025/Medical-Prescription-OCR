@@ -1,12 +1,9 @@
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import cv2
-
-# Import Widgets
-from ipywidgets import Button, Text, IntSlider, interact
-from IPython.display import display, clear_output
 
 # Import costume functions, corresponding to notebooks
 from ocr.normalization import imageNorm, letterNorm
@@ -15,21 +12,48 @@ from ocr.helpers import implt, resize
 from ocr.tfhelpers import Graph
 from ocr.datahelpers import idx2char
 
+
+# ### Global Variables
+
+# In[2]:
+
+
 # Settings
 IMG = '1'    # 1, 2, 3
 LANG = 'cz'  # cz, en
 MODEL_LOC = 'models/char-clas/' + LANG + '/CharClassifier'
 
+
+# ## Load Trained Model
+
+# In[3]:
+
+
 charClass = Graph(MODEL_LOC)
 
-raw_image = cv2.cvtColor(cv2.imread("test/%s.jpg" % IMG), cv2.COLOR_BGR2RGB)
-image = cv2.resize(raw_image,None,fx=0.5, fy=0.5, interpolation = cv2.INTER_CUBIC)
+
+# ## Load image
+
+# In[4]:
+
+
+image = cv2.cvtColor(cv2.imread("test/%s.jpg" % IMG), cv2.COLOR_BGR2RGB)
 implt(image)
+
+
+# In[5]:
+
 
 # Crop image and get bounding boxes
 crop = page.detection(image)
 implt(crop)
 bBoxes = words.detection(crop)
+
+
+# # Simple UI using widgets
+
+# In[6]:
+
 
 class Cycler:
     """ Cycle through the words and recognise them """
@@ -46,7 +70,7 @@ class Cycler:
         img = imageNorm(img, 60, border=False, tilt=True, hystNorm=True)
 
         # Separate letters
-        img = cv2.copyMakeBorder(img, 0, 0, 30, 30, cv2.BORDER_CONSTANT, value=[0, 0, 0])
+        img = cv2.copyMakeBorder(img, 0, 0, 30, 30,cv2.BORDER_CONSTANT, value=[0, 0, 0])
         gaps = charSeg.segmentation(img, RNN=True, debug=True)
 
         chars = []
@@ -80,9 +104,13 @@ class Cycler:
 
             self.recognise(img)
 
-cycler = Cycler(crop, bBoxes)
-implt(crop)
-# Interactive slider
-slider = IntSlider(value=0, min=0, max=len(bBoxes)-1, step=1, description='Index', continuous_update=False)
 
-interact(cycler.idxImage, index = slider)
+# In[7]:
+
+
+cycler = Cycler(crop, bBoxes)
+
+# Interactive slider
+
+for i in range(len(bBoxes)):
+    cycler.idxImage(i)
