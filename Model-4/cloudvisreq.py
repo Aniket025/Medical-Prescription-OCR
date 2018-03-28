@@ -1,6 +1,6 @@
 from __future__ import print_function
 from base64 import b64encode
-from os import makedirs
+from os import makedirs, remove
 from os.path import join, basename
 from sys import argv
 import json
@@ -77,3 +77,5 @@ if __name__ == '__main__':
                     #print(t['boundingPoly'])
                     #print("    Text:")
                     #print(t['description'])
+    for file in list:
+        remove(file)
