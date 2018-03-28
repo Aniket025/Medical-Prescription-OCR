@@ -1,192 +1,174 @@
-# -*- coding: UTF-8 -*
+
+# coding: utf-8
+
+# In[1]:
+
 
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 import tensorflow as tf
-import cv2
-import time
-import math
-from collections import Counter
-import unidecode
-from abc import ABC, abstractmethod
-
-# Import Widgets
-from ipywidgets import Button, Text, HBox, VBox
-from IPython.display import display, clear_output
-
-# Import costume functions, corresponding to notebooks
-from ocr import charSeg
-from ocr.normalization import letterNorm, imageNorm
-# from ocr import charSeg
-# Helpers
-from ocr.helpers import implt, resize, extendImg
-from ocr.datahelpers import loadWordsData, idx2char
+from ocr.helpers import *
 from ocr.tfhelpers import Graph
-from ocr.viz import printProgressBar
+from ocr.normalization import imageNorm, letterNorm
+from ocr.datahelpers import idx2char
+import cv2
+import math
 
-LANG = 'en'
 
-charClass_1 = Graph('models/char-clas/' + LANG + '/CharClassifier')
-# charClass_2 = Graph('models/char-clas/' + LANG + '/Bi-RNN/model_2', 'prediction')
-# charClass_3 = Graph('models/char-clas/' + LANG + '/Bi-RNN/model_1', 'prediction')
 
-wordClass = Graph('models/word-clas/' + LANG + '/WordClassifier2', 'prediction_infer')
-wordClass2 = Graph('models/word-clas/' + LANG + '/SeqRNN/Classifier3', 'word_prediction') # None
-wordClass3 = Graph('models/word-clas/' + LANG + '/CTC/Classifier2', 'word_prediction')
+# In[2]:
 
-images, labels = loadWordsData('data/test_words/' + LANG + '_raw', loadGaplines=False)
 
-for i in range(len(images)):
-    printProgressBar(i, len(images))
-    images[i] = imageNorm(
-        cv2.cvtColor(images[i], cv2.COLOR_GRAY2RGB),
-        60,
-        border=False,
-        tilt=True,
-        hystNorm=True)
+print("Loading Segmentation model:")
+segCNNGraph = Graph('models/gap-clas/CNN-CG')
+segRNNGraph = Graph('models/gap-clas/RNN/Bi-RNN-new', 'prediction')
+MODEL_LOC = 'models/char-clas/en/CharClassifier'
+charClass = Graph(MODEL_LOC)
 
-if LANG == 'en':
-    for i in range(len(labels)):
-        labels[i] = unidecode.unidecode(labels[i])
-print()
-print('Number of chars:', sum(len(l) for l in labels))
 
-# Load Words
-WORDS = {}
-with open('data/' + LANG + '_50k.txt') as f:
-    for line in f:
-        if LANG == 'en':
-            WORDS[unidecode.unidecode(line.split(" ")[0])] = int(line.split(" ")[1])
-        else:
-            WORDS[line.split(" ")[0]] = int(line.split(" ")[1])
-WORDS = Counter(WORDS)
+# In[3]:
 
-def P(word, N=sum(WORDS.values())):
-    "Probability of `word`."
-    return WORDS[word] / N
 
-def correction(word):
-    "Most probable spelling correction for word."
-    if word in WORDS:
-        return word
-    return max(candidates(word), key=P)
-
-def candidates(word):
-    "Generate possible spelling corrections for word."
-    return (known([word]) or known(edits1(word)) or known(edits2(word)) or [word])
-
-def known(words):
-    "The subset of `words` that appear in the dictionary of WORDS."
-    return set(w for w in words if w in WORDS)
-
-def edits1(word):
-    "All edits that are one edit away from `word`."
-
-    if LANG == 'cz':
-        letters = 'aábcčdďeéěfghiíjklmnňoópqrřsštťuúůvwxyýzž'
+def classify(img, step=2, RNN=False, slider=(60, 60)):
+    """ Slice the image and return raw output of classifier """
+    length = (img.shape[1] - slider[1]) // 2 + 1
+    if RNN:
+        input_seq = np.zeros((1, length, slider[0]*slider[1]), dtype=np.float32)
+        input_seq[0][:] = [img[:, loc * step: loc * step + slider[1]].flatten()
+                           for loc in range(length)]
+        pred = segRNNGraph.eval_feed({'inputs:0': input_seq,
+                                      'length:0': [length],
+                                      'keep_prob:0': 1})[0]
     else:
-        letters = 'abcdefghijklmnopqrstuvwxyz'
-    splits     = [(word[:i], word[i:])    for i in range(len(word) + 1)]
-    deletes    = [L + R[1:]               for L, R in splits if R]
-    transposes = [L + R[1] + R[0] + R[2:] for L, R in splits if len(R)>1]
-    replaces   = [L + c + R[1:]           for L, R in splits if R for c in letters]
-    inserts    = [L + c + R               for L, R in splits for c in letters]
-    return set(deletes + transposes + replaces + inserts)
-
-def edits2(word):
-    "All edits that are two edits away from `word`."
-    return (e2 for e1 in edits1(word) for e2 in edits1(e1))
-
-class Cycler(ABC):
-    """ Abstract cycler class """
-    def __init__(self, images, labels, charClass, stats="NO Stats Provided", slider=(60, 15), ctc=False, seq2seq=False, charRNN=False):
-        self.images = images
-        self.labels = labels
-        self.charClass = charClass
-        self.slider = slider
-        self.totalChars = sum([len(l) for l in labels])
-        self.ctc = ctc
-        self.seq2seq = seq2seq
-        self.charRNN = charRNN
-        self.stats = stats
-
-        self.evaluate()
-
-    @abstractmethod
-    def recogniseWord(self, img):
-        pass
-
-    def countCorrect(self, pred, label, lower=False):
-        correct = 0
-        for i in range(min(len(pred), len(label))):
-            if ((not lower and pred[i] == label[i])
-                 or (lower and pred[i] == label.lower()[i])):
-                correct += 1
-
-        return correct
+        input_seq = np.zeros((length, slider[0]*slider[1]), dtype=np.float32)
+        input_seq[:] = [img[:, loc * step: loc * step + slider[1]].flatten()
+                        for loc in range(length)]
+        pred = segCNNGraph.run(input_seq)
+        
+    return pred
 
 
-    def evaluate(self):
-        """ Evaluate accuracy of the word classification """
-        print()
-        print("STATS:", self.stats)
-        print(self.labels[1], ':', self.recogniseWord(self.images[1]))
-        start_time = time.time()
-        correctLetters = 0
-        correctWords = 0
-        correctWordsCorrection = 0
-        correctLettersCorrection = 0
-        for i in range(len(self.images)):
-            word = self.recogniseWord(self.images[i])
-            correctLetters += self.countCorrect(word,
-                                         self.labels[i])
-            # Correction works only for lower letters
-            correctLettersCorrection += self.countCorrect(correction(word.lower()),self.labels[i],lower=True)
-            # Words accuracy
-            if word == self.labels[i]:
-                correctWords += 1
-            if correction(word.lower()) == self.labels[i].lower():
-                correctWordsCorrection += 1
+# In[4]:
 
-        print("Correct/Total: %s / %s" % (correctLetters, self.totalChars))
-        print("Letter Accuracy: %s %%" % round(correctLetters/self.totalChars * 100, 4))
-        print("Letter Accuracy with Correction: %s %%" % round(correctLettersCorrection/self.totalChars * 100, 4))
-        print("Word Accuracy: %s %%" % round(correctWords/len(self.images) * 100, 4))
-        print("Word Accuracy with Correction: %s %%" % round(correctWordsCorrection/len(self.images) * 100, 4))
-        print("--- %s seconds ---" % round(time.time() - start_time, 2))
 
-class CharCycler(Cycler):
-    """ Cycle through the words and recognise them """
-    def recogniseWord(self, img):
-        img = cv2.copyMakeBorder(img, 0, 0, 30, 30, cv2.BORDER_CONSTANT, value=[0, 0, 0])
-        gaps = charSeg.segmentation(img, RNN=True)
+def segmentation(img, step=2, RNN=False, debug=False):
+    """
+    Take preprocessed image of word
+    and return array of positions separating chars - gaps
+    """
+    slider = (60, 30)
+    if RNN:
+        slider = (60, 60)
+    
+    # Run the classifier
+    pred = classify(img, step=step, RNN=RNN, slider=slider)
 
-        chars = []
-        for i in range(len(gaps)-1):
-            char = img[:, gaps[i]:gaps[i+1]]
-            # TODO None type error after treshold
-            char, dim = letterNorm(char, is_thresh=True, dim=True)
-            # TODO Test different values
-            if dim[0] > 4 and dim[1] > 4:
-                chars.append(char.flatten())
+    # Finalize the gap positions from raw prediction
+    gaps = []
+    lastGap = 0
+    gapCount = 1
+    gapPositionSum = slider[1] / 2
+    firstGap = True
+    gapBlockFirst = 0
+    gapBlockLast = slider[1] / 2
 
-        chars = np.array(chars)
-        word = ''
-        if len(chars) != 0:
-            if self.charRNN:
-                pred = self.charClass.eval_feed({'inputs:0': [chars], 'length:0': [len(chars)], 'keep_prob:0': 1})[0]
-            else:
-                pred = self.charClass.run(chars)
+    for i, p in enumerate(pred):
+        if p == 1:
+            gapPositionSum += i * step + slider[1] / 2
+            gapBlockLast = i * step + slider[1] / 2
+            gapCount += 1
+            lastGap = 0
+            if gapBlockFirst == 0:
+                gapBlockFirst = i * step + slider[1] / 2
+        else:
+            if gapCount != 0 and lastGap >= 1:
+                if firstGap:
+                    gaps.append(int(gapBlockLast))
+                    firstGap = False
+                else:
+                    gaps.append(int(gapPositionSum // gapCount))
+                gapPositionSum = 0
+                gapCount = 0
+            gapBlockFirst = 0
+            lastGap += 1
 
-            for c in pred:
-                # word += CHARS[charIdx]
-                word += idx2char(c)
-        return word
+    # Adding final gap position
+    if gapBlockFirst != 0:
+        gaps.append(int(gapBlockFirst))
+    else:
+        gapPositionSum += (len(pred) - 1) * 2 + slider[1]/2
+        gaps.append(int(gapPositionSum / (gapCount + 1)))
+        
+    if debug:
+        # Drawing lines
+        img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+        for gap in gaps:
+            cv2.line(img,
+                     ((int)(gap), 0),
+                     ((int)(gap), slider[0]),
+                     (0, 255, 0), 1)
+        #implt(img, t="Separated characters")
+        
+    return gaps
 
-# Class cycling through words
 
-#WordCycler(images, labels, wordClass, stats='Seq2Seq', slider=(60, 2), seq2seq=True)
-#WordCycler(images, labels, wordClass2, stats='Seq2Seq2CNN', slider=(60, 2))
-#WordCycler(images, labels, wordClass3, stats='CTC', slider=(60, 2), ctc=True)
-CharCycler(images, labels, charClass_1, stats='Bi-RNN and CNN', charRNN=False)
+# In[5]:
+
+
+# img = cv2.imread("./output/words/normal/0.jpg")
+# implt(img)
+
+
+# # In[6]:
+
+
+# img = cv2.imread("./output/words/normal/85.jpg")
+# implt(img)
+# img = imageNorm(img,60,border=False,tilt=True,hystNorm=True)
+# implt(img)
+# img = cv2.copyMakeBorder(img,0,0,30,30,cv2.BORDER_CONSTANT, value=[0,0,0])
+# implt(img)
+
+
+# # In[12]:
+
+
+# gaps = segmentation(img, step=2, RNN=True, debug=False)
+
+
+# # In[13]:
+
+
+# print gaps
+
+
+# # In[14]:
+
+
+# for i in range(0,(len(gaps)-1)):
+#     implt(img[0:60,gaps[i]:gaps[i+1]])
+
+
+# # In[15]:
+
+
+# chars = []
+# for i in range(0,(len(gaps)-1)):
+#     char = img[0:60,gaps[i]:gaps[i+1]]
+#     char, dim = letterNorm(char, is_thresh=True, dim=True)
+#     if dim[0]>4 and dim[1]>4:
+#         chars.append(char.flatten())
+
+
+# # In[16]:
+
+
+# chars = np.array(chars)
+# word = ''
+
+# if len(chars) != 0:
+#     pred = charClass.run(chars)
+#     for c in pred:
+#         word += idx2char(c)
+        
+# print word
+

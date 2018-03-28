@@ -4,8 +4,6 @@ import matplotlib.pyplot as plt
 import cv2
 from ocr.helpers import implt, resize, ratio
 
-image = cv2.cvtColor(cv2.imread("2.jpg"), cv2.COLOR_BGR2RGB)
-
 def edgesDet(img, minVal, maxVal):
     """ Preprocessing (gray, thresh, filter, border) + Canny edge detection """
     img = cv2.cvtColor(resize(img), cv2.COLOR_BGR2GRAY)
@@ -24,12 +22,6 @@ def edgesDet(img, minVal, maxVal):
 
     return cv2.Canny(img, minVal, maxVal)
 
-
-# Edge detection ()
-imageEdges = edgesDet(image, 200, 250)
-
-# Close gaps between edges (double page clouse => rectangle kernel)
-closedEdges = cv2.morphologyEx(imageEdges, cv2.MORPH_CLOSE, np.ones((5, 11)))
 
 def fourCornersSort(pts):
     """ Sort corners: top-left, bot-left, bot-right, top-right"""
@@ -81,10 +73,6 @@ def findPageContours(edges, img):
     pageContour = fourCornersSort(pageContour[:, 0])
     return contourOffset(pageContour, (-5, -5))
 
-pageContour = findPageContours(closedEdges, resize(image))
-
-# Recalculate to original scale
-pageContour = pageContour.dot(ratio(image))
 
 def perspImageTransform(img, sPoints):
     """ Transform perspective from start points to target points """
@@ -106,6 +94,26 @@ def perspImageTransform(img, sPoints):
 
     M = cv2.getPerspectiveTransform(sPoints, tPoints)
     return cv2.warpPerspective(img, M, (int(width), int(height)))
+
+
+
+
+
+#--
+
+image = cv2.cvtColor(cv2.imread("test1.jpeg"), cv2.COLOR_BGR2RGB)
+
+# Edge detection ()
+imageEdges = edgesDet(image, 200, 250)
+
+# Close gaps between edges (double page clouse => rectangle kernel)
+closedEdges = cv2.morphologyEx(imageEdges, cv2.MORPH_CLOSE, np.ones((5, 11)))
+
+
+pageContour = findPageContours(closedEdges, resize(image))
+
+# Recalculate to original scale
+pageContour = pageContour.dot(ratio(image))
 
 
 newImage = perspImageTransform(image, pageContour)
