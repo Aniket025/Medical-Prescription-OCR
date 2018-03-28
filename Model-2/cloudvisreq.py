@@ -41,7 +41,7 @@ def request_ocr(api_key, image_filenames):
 
 if __name__ == '__main__':
     api_key = "AIzaSyCSMpzBIKlZObk8Uzkx6Iavo967m7vFf0Q"
-    image_filenames = "test/1.jpg"
+    image_filenames = "test/2.jpg"
     if not api_key or not image_filenames:
         print("""Please supply an api key, then one or more image filenames $ python cloudvisreq.py image1.jpg image2.png""")
     else:
